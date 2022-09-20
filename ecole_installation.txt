@@ -1,0 +1,52 @@
+# ecole installation procedure
+
+## SCIP installation
+Head over to `https://www.scipopt.org/index.php#download` and download the SCIPOptSuite-8.0.1-Linux-ubuntu.sh script.
+
+Install the dependencies : 
+``` bash
+sudo apt-get install gcc g++ gfortran liblapack3 libtbb2 libcliquer1 libopenblas-dev libgsl23 patchelf cmake
+```
+
+If building from source install the following : 
+``` bash
+sudo apt-get install wget cmake g++ m4 xz-utils libgmp-dev unzip zlib1g-dev libboost-program-options-dev libboost-serialization-dev libboost-regex-dev libboost-iostreams-dev libtbb-dev libreadline-dev pkg-config git liblapack-dev libgsl-dev flex bison libcliquer-dev gfortran file dpkg-dev libopenblas-dev rpm
+```
+
+Given execution permission to the script and install it:
+``` bash
+chmod +x SCIPOptSuite-8.0.1-Linux-ubuntu.sh
+sudo ./SCIPOptSuite-8.0.1-Linux-ubuntu.sh
+```
+
+By default SCIP will be installed in <download_directory>/SCIPOptSuite-8.0.1-Linux. To allow `ecole` to find SCIPs executables and libraries during installation export the following environment variables : 
+``` bash
+export SCIP_DIR=<download_directory>/SCIPOptSuite-8.0.1-Linux
+export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:<download_directory>/SCIPOptSuite-8.0.1-Linux/lib"
+```
+
+## LeonaireHo ecole module
+Start by cloning the repository:
+``` bash
+git clone https://github.com/LeonaireHo/ecole.git
+cd ecole
+```
+
+Install the module: 
+``` bash
+python3 setup.py install
+```
+
+## Test installation
+``` python
+import ecole
+```
+
+## Installing PySCIPOpt
+Export the environment variable allowing the installation script to find SCIP headers : 
+``` bash
+export SCIPOPTDIR=<download_directory>/SCIPOptSuite-8.0.1-Linux
+python3 -m pip install pyscipopt
+```
+
+
