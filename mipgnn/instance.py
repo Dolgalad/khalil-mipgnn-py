@@ -2,6 +2,7 @@ import sys
 import numpy as np
 import networkx as nx
 from pysmps import smps_loader as smps
+from cplex import Cplex
 
 import matplotlib.pyplot as plt
 
@@ -93,6 +94,11 @@ class MIPInstance:
         """Load data from MPS file
         """
         return MIPInstance(*smps.load_mps(filename))
+
+    @staticmethod
+    def dump(instance, file):
+        pass
+
 
 
 

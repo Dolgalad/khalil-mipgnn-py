@@ -34,83 +34,85 @@ from mipgnn.predict import create_data_object
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
-# Preprocessing to create Torch dataset.
-class GraphDataset(InMemoryDataset):
+## Preprocessing to create Torch dataset.
+#class GraphDataset(InMemoryDataset):
+#
+#    def __init__(self, name, root, data_path, bias_threshold, transform=None, pre_transform=None,
+#                 pre_filter=None):
+#
+#        self.bias_threshold = bias_threshold
+#        super(GraphDataset, self).__init__(root, transform, pre_transform, pre_filter)
+#        self.data, self.slices = torch.load(self.processed_paths[0])
+#
+#        #global global_name
+#        #global global_data_path
+#
+#    @property
+#    def raw_file_names(self):
+#        return name
+#
+#    @property
+#    def processed_file_names(self):
+#        return name
+#
+#    def download(self):
+#        pass
+#
+#    def process(self):
+#        print("Preprocessing.")
+#
+#        data_list = []
+#
+#        graph_files = [f for f in os.listdir(pd) if f.endswith("graph_bias.pkl")]
+#        num_graphs = len(graph_files)
+#
+#        # Iterate over instance files and create data objects.
+#        for num, filename in enumerate(graph_files):
+#            print(filename, num, num_graphs)
+#
+#            # Get graph.
+#            graph = nx.read_gpickle(os.path.join(pd, filename))
+#            # get data object
+#            data,_,_ = create_data_object(graph, self.bias_threshold)
+#            data_list.append(data)
+#
+#        data, slices = self.collate(data_list)
+#        torch.save((data, slices), self.processed_paths[0])
+#
+#
+## Preprocess indices of bipartite graphs to make batching work.
+#class MyData(Data):
+#    def __inc__(self, key, value, store):
+#        if key in ['edge_index_var']:
+#            return torch.tensor([self.num_nodes_var, self.num_nodes_con]).view(2, 1)
+#        elif key in ['edge_index_con']:
+#            return torch.tensor([self.num_nodes_con, self.num_nodes_var]).view(2, 1)
+#        elif key in ['index']:
+#            return self.num_nodes_con.clone().detach()
+#            return torch.tensor(self.num_nodes_con)
+#        elif key in ['index_var']:
+#            return self.num_nodes_var.clone().detach()
+#            return torch.tensor(self.num_nodes_var)
+#        else:
+#            return 0
+#
+#
+#class MyTransform(object):
+#    def __call__(self, data):
+#        new_data = MyData()
+#        for key, item in data:
+#            new_data[key] = item
+#        return new_data
 
-    def __init__(self, name, root, data_path, bias_threshold, transform=None, pre_transform=None,
-                 pre_filter=None):
-
-        self.bias_threshold = bias_threshold
-        super(GraphDataset, self).__init__(root, transform, pre_transform, pre_filter)
-        self.data, self.slices = torch.load(self.processed_paths[0])
-
-        #global global_name
-        #global global_data_path
-
-    @property
-    def raw_file_names(self):
-        return name
-
-    @property
-    def processed_file_names(self):
-        return name
-
-    def download(self):
-        pass
-
-    def process(self):
-        print("Preprocessing.")
-
-        data_list = []
-
-        graph_files = [f for f in os.listdir(pd) if f.endswith("graph_bias.pkl")]
-        num_graphs = len(graph_files)
-
-        # Iterate over instance files and create data objects.
-        for num, filename in enumerate(graph_files):
-            print(filename, num, num_graphs)
-
-            # Get graph.
-            graph = nx.read_gpickle(os.path.join(pd, filename))
-            # get data object
-            data,_,_ = create_data_object(graph, self.bias_threshold)
-            data_list.append(data)
-
-        data, slices = self.collate(data_list)
-        torch.save((data, slices), self.processed_paths[0])
-
-
-# Preprocess indices of bipartite graphs to make batching work.
-class MyData(Data):
-    def __inc__(self, key, value, store):
-        if key in ['edge_index_var']:
-            return torch.tensor([self.num_nodes_var, self.num_nodes_con]).view(2, 1)
-        elif key in ['edge_index_con']:
-            return torch.tensor([self.num_nodes_con, self.num_nodes_var]).view(2, 1)
-        elif key in ['index']:
-            return self.num_nodes_con.clone().detach()
-            return torch.tensor(self.num_nodes_con)
-        elif key in ['index_var']:
-            return self.num_nodes_var.clone().detach()
-            return torch.tensor(self.num_nodes_var)
-        else:
-            return 0
-
-
-class MyTransform(object):
-    def __call__(self, data):
-        new_data = MyData()
-        for key, item in data:
-            new_data[key] = item
-        return new_data
-
+from mipgnn.dataset import GraphDataset, MyData, MyTransform
 
 dataset_list = [
-    "/home/aschulz/.cache/mipgnn/datasets/test_dataset/set_cover_500_500_0.1",
+    #"/home/aschulz/.cache/mipgnn/datasets/test_dataset/set_cover_500_500_0.1",
+    "/data/aschulz/integer_programs/bibliograph/mip_gnn/python/khalil/datasets/xin_set_cover_1500/DataSetSC1500",
 ]
 
 name_list = [
-    "set_cover_500_500_0.1",
+    "xin_set_cover_1500_1500-2000_0.1",
 ]
 
 test_scores = []
@@ -161,7 +163,7 @@ for rep in [0, 1, 2, 3, 4]:
 
                 batch_size = 10
 
-                num_epochs = 100
+                num_epochs = 30
 
                 pathr = osp.join(osp.dirname(osp.realpath(__file__)), '.', 'data', 'DS')
                 pathr = osp.dirname(dataset_list[i])
