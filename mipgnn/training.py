@@ -1,22 +1,22 @@
 import sys
-import argparse
 
-from progress.bar import Bar
+sys.path.insert(0, '..')
+sys.path.insert(0, '../..')
+sys.path.insert(0, '.')
 
 import matplotlib.pyplot as plt
 
 import os
 import os.path as osp
-
+import networkx as nx
 from sklearn.model_selection import train_test_split
 
 from torchmetrics import F1Score, Precision, Recall, Accuracy
 
-#from torch_geometric.data import (InMemoryDataset, Data)
+from torch_geometric.data import (InMemoryDataset, Data)
 from torch_geometric.loader import DataLoader
-
 import numpy as np
-#import pandas as pd
+import pandas as pd
 import torch
 import torch.nn.functional as F
 
@@ -33,125 +33,78 @@ from mipgnn.predict import create_data_object
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+
+## Preprocessing to create Torch dataset.
+#class GraphDataset(InMemoryDataset):
+#
+#    def __init__(self, name, root, data_path, bias_threshold, transform=None, pre_transform=None,
+#                 pre_filter=None):
+#
+#        self.bias_threshold = bias_threshold
+#        super(GraphDataset, self).__init__(root, transform, pre_transform, pre_filter)
+#        self.data, self.slices = torch.load(self.processed_paths[0])
+#
+#        #global global_name
+#        #global global_data_path
+#
+#    @property
+#    def raw_file_names(self):
+#        return name
+#
+#    @property
+#    def processed_file_names(self):
+#        return name
+#
+#    def download(self):
+#        pass
+#
+#    def process(self):
+#        print("Preprocessing.")
+#
+#        data_list = []
+#
+#        graph_files = [f for f in os.listdir(pd) if f.endswith("graph_bias.pkl")]
+#        num_graphs = len(graph_files)
+#
+#        # Iterate over instance files and create data objects.
+#        for num, filename in enumerate(graph_files):
+#            print(filename, num, num_graphs)
+#
+#            # Get graph.
+#            graph = nx.read_gpickle(os.path.join(pd, filename))
+#            # get data object
+#            data,_,_ = create_data_object(graph, self.bias_threshold)
+#            data_list.append(data)
+#
+#        data, slices = self.collate(data_list)
+#        torch.save((data, slices), self.processed_paths[0])
+#
+#
+## Preprocess indices of bipartite graphs to make batching work.
+#class MyData(Data):
+#    def __inc__(self, key, value, store):
+#        if key in ['edge_index_var']:
+#            return torch.tensor([self.num_nodes_var, self.num_nodes_con]).view(2, 1)
+#        elif key in ['edge_index_con']:
+#            return torch.tensor([self.num_nodes_con, self.num_nodes_var]).view(2, 1)
+#        elif key in ['index']:
+#            return self.num_nodes_con.clone().detach()
+#            return torch.tensor(self.num_nodes_con)
+#        elif key in ['index_var']:
+#            return self.num_nodes_var.clone().detach()
+#            return torch.tensor(self.num_nodes_var)
+#        else:
+#            return 0
+#
+#
+#class MyTransform(object):
+#    def __call__(self, data):
+#        new_data = MyData()
+#        for key, item in data:
+#            new_data[key] = item
+#        return new_data
+
 from mipgnn.datasets import GraphDataset, MyData, MyTransform
-
-def train_epoch_model(model, dataloader, optimizer, device=None, batch_size=10):
-    if device is None:
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model.to(device)
-    model.train()
-
-    # loss_all = 0
-    zero = torch.tensor([0]).to(device)
-    one = torch.tensor([1]).to(device)
-
-    loss_all = 0
-
-    for data in dataloader:
-        data = data.to(device)
-
-        y = data.y_real
-        y = torch.where(y <= bias_threshold, zero, one).to(device)
-
-        optimizer.zero_grad()
-        output = model(data)
-
-        loss = F.nll_loss(output, y)
-        loss.backward()
-        loss_all += batch_size * loss.item()
-        optimizer.step()
-
-    return loss_all / len(train_dataset)
-
-def train_model(model, epochs, train_loader, val_loader, test_loader, optimizer, device=None, batch_size=10, metrics=[], model_name="generic_model"):
-    best_val = 0.0
-    test_acc = 0.0
-    test_f1 = 0.0
-    test_re = 0.0
-    test_pr = 0.0
-
-    # training history
-    history = []
-    
-    # target directory
-    model_directory = os.path.expanduser("~/.cache/mipgnn/models")
-    model_log_path = os.path.join(model_directory, model_name+".log")
-    model_path = os.path.join(model_directory, model_name)
-    os.makedirs(model_directory, exist_ok=True)
- 
-    with Bar(f"Training {model_name}: ", max=epochs) as bar:
-        for epoch in range(epochs):
-            train_loss = train_epoch_model(model, train_loader, optimizer, batch_size=batch_size)
-    
-            [train_acc,train_f1,train_pr,train_re] = evaluate_model(model, train_loader, metrics=metrics)
-    
-            [val_acc,val_f1,val_pr,val_re] = evaluate_model(model, val_loader, metrics=metrics)
-            scheduler.step(val_acc)
-            lr = scheduler.optimizer.param_groups[0]['lr']
-    
-            if val_acc > best_val:
-                best_val = val_acc
-                #[test_acc,test_f1,test_pr,test_re] = evaluate_model(model, test_loader, metrics=metrics)
-                torch.save(model.state_dict(), model_path)
-    
-            history.append(
-                [epoch, train_loss, 
-                    train_acc.item(), train_f1.item(), train_pr.item(), train_re.item(), 
-                    val_acc.item(), val_f1.item(), val_pr.item(), val_re.item(), best_val.item(), 
-                    ])
-                    #test_acc.item(), test_f1.item(), test_pr.item(), test_re.item()])
-    
-            # Break if learning rate is smaller 10**-6.
-            if lr < 0.000001 or epoch == num_epochs:
-                #print([model_name, test_acc, test_f1, test_pr, test_re])
-                test_scores.append([model_name, test_acc, test_f1, test_pr, test_re])
-                history = np.array(history)
-    
-                np.savetxt(model_log_path, history, delimiter=",",
-                           fmt='%1.5f')
-                break
-
-            bar.next()
-        return np.array(history)
-
-
-
-@torch.no_grad()
-def evaluate_model(model, dataloader, device=None, metrics=[]):
-    if device is None:
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-    model.eval()
-
-    zero = torch.tensor([0]).to(device)
-    one = torch.tensor([1]).to(device)
-
-    metrics = [metric.to(device) for metric in metrics]
-
-    first = True
-    for data in dataloader:
-        data = data.to(device)
-        pred = model(data)
-
-        y = data.y_real
-
-        y = torch.where(y <= bias_threshold, zero, one).to(device)
-        pred = pred.max(dim=1)[1]
-
-        if not first:
-            pred_all = torch.cat([pred_all, pred])
-            y_all = torch.cat([y_all, y])
-        else:
-            pred_all = pred
-            y_all = y
-            first = False
-
-    return [m(pred_all, y_all) for m in metrics]
-
-    return acc(pred_all, y_all), f1(pred_all, y_all), pr(pred_all, y_all), re(pred_all, y_all)
-
-
-
 
 dataset_list = [
     #"/home/aschulz/.cache/mipgnn/datasets/test_dataset/set_cover_500_500_0.1",
@@ -165,89 +118,6 @@ name_list = [
     "set_cover_n1000_nv30_nc30_d0.1_test",
     #"xin_set_cover_1500_1500-2000_0.1",
 ]
-
-gnn_models = [("EdgeConv", EdgeConv, dict(hidden=64, num_layers=4, aggr="mean", regression=False)),
-        ("EdgeConvSimple", EdgeConvSimple, dict(hidden=64, num_layers=4, aggr="mean", regression=False)),
-        ("GIN", GIN, dict(hidden=64, num_layers=4, aggr="mean", regression=False)),
-        ("GINSimple", GINSimple, dict(hidden=64, num_layers=4, aggr="mean", regression=False)),
-        ("Sage", Sage, dict(hidden=64, num_layers=4, aggr="mean", regression=False)),
-        ("SageSimple", SageSimple, dict(hidden=64, num_layers=4, aggr="mean", regression=False))
-        ]
-
-
-if __name__=="__main__":
-    metrics = [Accuracy(num_classes=2),
-            F1Score(num_classes=2, average="macro"),
-            Precision(num_classes=2, average="macro"),
-            Recall(num_classes=2, average="macro"),
-            ]
-
-
-
-    # Prepare data.
-    bias_threshold = 0.0
-    batch_size = 10
-    num_epochs = 30
-    
-    # model
-    model = EdgeConv(hidden=64, num_layers=4, aggr="mean", regression=False)
-    model_name = f"EC_{name_list[0]}_{bias_threshold}"
-
-    # training settings
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',
-                                                           factor=0.8, patience=10,
-                                                           min_lr=0.0000001)
- 
-
-    # processed dataset directory
-    processed_data_root = os.path.expanduser("~/.cache/mipgnn/datasets")
-
-    # path to non processed train data
-    train_data_path = dataset_list[0]
-    name_train = name_list[0]
-    print(f"Train dataset {name_train}, data_path:{train_data_path}")
-
-    # train dataset
-    train_dataset = GraphDataset(name_train, processed_data_root, train_data_path, bias_threshold,
-                                 transform=MyTransform()).shuffle()
-    
-    # test dataset
-    test_data_path = dataset_list[1]
-    name_test = name_list[1]
-    print(f"Test dataset {name_test}, data_path:{test_data_path}")
-    test_dataset = GraphDataset(name_test, processed_data_root, test_data_path, bias_threshold,
-                                transform=MyTransform()).shuffle()
-
-    train_index, val_index = train_test_split(list(range(0, len(train_dataset))), test_size=0.2)
-    #train_index, val_index = train_test_split(train_index, test_size=.2)
-
-    val_dataset = train_dataset[val_index].shuffle()
-    #test_dataset = train_dataset[test_index].shuffle() #test_dataset.shuffle()
-    train_dataset = train_dataset[train_index].shuffle()
-
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True)
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
-
-    for name,model_cls,params in gnn_models:
-        # model
-        model = model_cls(**params)
-        model_name = f"{name}_{name_list[0]}_{bias_threshold}"
-
-
-        history = train_model(model, 3, train_loader, val_loader, test_loader, optimizer, model_name=model_name, metrics=metrics)
-    
-        # test the model
-        test_metrics = evaluate_model(model, test_loader, metrics=metrics)
-        print("\tTest metrics: ", test_metrics)
-        
-        torch.cuda.empty_cache()
-
-
-
-
-exit()
 
 test_scores = []
 
