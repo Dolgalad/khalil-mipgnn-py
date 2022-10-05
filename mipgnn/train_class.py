@@ -39,7 +39,7 @@ from mipgnn.datasets import GraphDataset, MyData, MyTransform
 def train_epoch_model(model, dataloader, optimizer, device=None, batch_size=10):
     if device is None:
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model.to(device)
+    #model.to(device)
     model.train()
 
     # loss_all = 0
@@ -226,7 +226,7 @@ if __name__=="__main__":
 
     # model
     model_args = json.loads(args.model_args)
-    model = eval(args.model)(**model_args)
+    model = eval(args.model)(**model_args).to(device)
     model_name = args.name
     if len(model_name)==0:
         model_name = f"{model}_{name_train}"
