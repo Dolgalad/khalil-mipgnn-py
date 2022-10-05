@@ -1,5 +1,6 @@
 import sys
 import argparse
+import json
 
 from progress.bar import Bar
 
@@ -63,7 +64,7 @@ def train_epoch_model(model, dataloader, optimizer, device=None, batch_size=10):
 
     return loss_all / len(train_dataset)
 
-def train_model(model, epochs, train_loader, val_loader, test_loader, optimizer, device=None, batch_size=10, metrics=[], model_name="generic_model"):
+def train_model(model, epochs, train_loader, val_loader, optimizer, device=None, batch_size=10, metrics=[], model_name="generic_model"):
     best_val = 0.0
     test_acc = 0.0
     test_f1 = 0.0
@@ -104,15 +105,19 @@ def train_model(model, epochs, train_loader, val_loader, test_loader, optimizer,
             # Break if learning rate is smaller 10**-6.
             if lr < 0.000001 or epoch == num_epochs:
                 #print([model_name, test_acc, test_f1, test_pr, test_re])
-                test_scores.append([model_name, test_acc, test_f1, test_pr, test_re])
-                history = np.array(history)
-    
-                np.savetxt(model_log_path, history, delimiter=",",
-                           fmt='%1.5f')
+                #test_scores.append([model_name, test_acc, test_f1, test_pr, test_re])
+                #history = np.array(history)
+                #np.savetxt(model_log_path, history, delimiter=",",
+                #           fmt='%1.5f')
                 break
 
             bar.next()
-        return np.array(history)
+    history = np.array(history)
+    print(f"Saving history to {model_log_path}")
+    np.savetxt(model_log_path, history, delimiter=",",
+                           fmt='%1.5f')
+
+    return np.array(history)
 
 
 
@@ -176,50 +181,70 @@ gnn_models = [("EdgeConv", EdgeConv, dict(hidden=64, num_layers=4, aggr="mean", 
 
 
 if __name__=="__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("model", type=str, help="model that you want to train")
+    parser.add_argument("model_args", type=str, help="model constructor arguments as JSON")
+    parser.add_argument("--name", type=str, help="name of the trained model", default="")
+    parser.add_argument("--train-data", type=str, help="path to training data")
+    parser.add_argument("--validation-split", type=float, help="validation split (default=0.)", default=0.)
+    parser.add_argument("--bias-threshold", type=float, help="bias threshold (default=0.)", default=0.)
+    parser.add_argument("--batch-size", type=int, help="batch size (default=10)", default=10)
+    parser.add_argument("--epochs", type=int, help="number of epochs (default=30)", default=30)
+    parser.add_argument("--learning-rate", type=float, help="learning rate (default=0.001)", default=0.001)
+    parser.add_argument("--min-learning-rate", type=float, help="minimum learning rate (default=0.0000001)", default=0.0000001)
+    parser.add_argument("--patience", type=int, help="scheduler patience (default=10)", default=10)
+    parser.add_argument("--train-test-split", type=float, help="split into training and testing sets (default=0.2)", default=0.2)
+
+
+    args = parser.parse_args()
+
+    # metrics 
     metrics = [Accuracy(num_classes=2),
-            F1Score(num_classes=2, average="macro"),
-            Precision(num_classes=2, average="macro"),
-            Recall(num_classes=2, average="macro"),
+               F1Score(num_classes=2, average="macro"),
+               Precision(num_classes=2, average="macro"),
+               Recall(num_classes=2, average="macro"),
             ]
 
-
-
     # Prepare data.
-    bias_threshold = 0.0
-    batch_size = 10
-    num_epochs = 30
-    
-    # model
-    model = EdgeConv(hidden=64, num_layers=4, aggr="mean", regression=False)
-    model_name = f"EC_{name_list[0]}_{bias_threshold}"
-
-    # training settings
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',
-                                                           factor=0.8, patience=10,
-                                                           min_lr=0.0000001)
- 
+    bias_threshold = args.bias_threshold
+    batch_size = args.batch_size
+    num_epochs = args.epochs
 
     # processed dataset directory
     processed_data_root = os.path.expanduser("~/.cache/mipgnn/datasets")
 
-    # path to non processed train data
-    train_data_path = dataset_list[0]
-    name_train = name_list[0]
-    print(f"Train dataset {name_train}, data_path:{train_data_path}")
+    # training data
+    train_data_path = args.train_data
+    if not os.path.exists(train_data_path):
+        print(f"Train data path not found : {train_data_path}")
 
-    # train dataset
+    name_train = os.path.basename(train_data_path)
+    print(f"Loading training data {name_train} from {train_data_path}")
     train_dataset = GraphDataset(name_train, processed_data_root, train_data_path, bias_threshold,
                                  transform=MyTransform()).shuffle()
-    
-    # test dataset
-    test_data_path = dataset_list[1]
-    name_test = name_list[1]
-    print(f"Test dataset {name_test}, data_path:{test_data_path}")
-    test_dataset = GraphDataset(name_test, processed_data_root, test_data_path, bias_threshold,
-                                transform=MyTransform()).shuffle()
+ 
 
-    train_index, val_index = train_test_split(list(range(0, len(train_dataset))), test_size=0.2)
+    # model
+    model_args = json.loads(args.model_args)
+    model = eval(args.model)(**model_args)
+    model_name = args.name
+    if len(model_name)==0:
+        model_name = f"{model}_{name_train}"
+
+    print(f"Model saved as {model_name}")
+    
+    # model
+    #model = EdgeConv(hidden=64, num_layers=4, aggr="mean", regression=False)
+    #model_name = f"EC_{name_list[0]}_{bias_threshold}"
+
+    # training settings
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',
+                                                           factor=0.8, patience=args.patience,
+                                                           min_lr=args.min_learning_rate)
+ 
+
+    train_index, val_index = train_test_split(list(range(0, len(train_dataset))), test_size=args.train_test_split)
     #train_index, val_index = train_test_split(train_index, test_size=.2)
 
     val_dataset = train_dataset[val_index].shuffle()
@@ -228,242 +253,27 @@ if __name__=="__main__":
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True)
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
+    #test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
 
-    for name,model_cls,params in gnn_models:
-        # model
-        model = model_cls(**params)
-        model_name = f"{name}_{name_list[0]}_{bias_threshold}"
+    # train the model
+    history = train_model(model, args.epochs, train_loader, val_loader, optimizer, model_name=model_name, metrics=metrics)
 
+    # save the models training arguments
+    model_data = {"name": model_name,
+            "model_class":args.model,
+            "model_args": json.loads(args.model_args),
+            "epochs": args.epochs,
+            "learining_rate": args.learning_rate,
+            "patience": args.patience,
+            "min_learning_rate": args.min_learning_rate,
+            "train_dataset": name_train,
+            "train_test_split": args.train_test_split,
+            }
+    model_data_path= os.path.expanduser(f"~/.cache/mipgnn/models/{model_name}.json")
+    with open(model_data_path, "w") as f:
+        f.write(json.dumps(model_data))
 
-        history = train_model(model, 3, train_loader, val_loader, test_loader, optimizer, model_name=model_name, metrics=metrics)
-    
-        # test the model
-        test_metrics = evaluate_model(model, test_loader, metrics=metrics)
-        print("\tTest metrics: ", test_metrics)
-        
-        torch.cuda.empty_cache()
-
-
-
-
-exit()
-
-test_scores = []
-
-for rep in [0, 1, 2, 3, 4]:
-    for i in [0]:
-        # Bias.
-        for bias in [0.0, 0.001, 0.1]:
-            # GNN.
-            for m in ["ECS", "GINS", "SGS", "EC", "GIN", "SG"]:
-                log = []
-
-                # Setup model.
-                device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-                if m == "EC":
-                    model = EdgeConv(hidden=64, num_layers=4, aggr="mean", regression=False).to(device)
-                    model_name = f"EC_{name_list[i]}_{bias}_{rep}"
-                    print(model_name, bias, name_list[i])
-                elif m == "ECS":
-                    model = EdgeConvSimple(hidden=64, num_layers=4, aggr="mean", regression=False).to(device)
-                    model_name = f"ECS_{name_list[i]}_{bias}_{rep}"
-                    print(model_name, bias, name_list[i])
-                elif m == "GIN":
-                    model = GIN(hidden=64, num_layers=4, aggr="mean", regression=False).to(device)
-                    model_name = f"GIN_{name_list[i]}_{bias}_{rep}"
-                    print(model_name, bias, name_list[i])
-                elif m == "GINS":
-                    model = GINSimple(hidden=64, num_layers=4, aggr="mean", regression=False).to(device)
-                    model_name = f"GINS_{name_list[i]}_{bias}_{rep}"
-                    print(model_name, bias, name_list[i])
-                elif m == "SG":
-                    model = Sage(hidden=64, num_layers=4, aggr="mean", regression=False).to(device)
-                    model_name = f"SG_{name_list[i]}_{bias}_{rep}"
-                    print(model_name, bias, name_list[i])
-                elif m == "SGS":
-                    model = SageSimple(hidden=64, num_layers=4, aggr="mean", regression=False).to(device)
-                    model_name = f"SGS_{name_list[i]}_{bias}_{rep}"
-                    print(model_name, bias, name_list[i])
-
-                optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-                scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',
-                                                                       factor=0.8, patience=10,
-                                                                       min_lr=0.0000001)
-
-                # Prepare data.
-                bias_threshold = bias
-                batch_size = 10
-                num_epochs = 30
-
-                # processed dataset directory
-                processed_data_root = os.path.expanduser("~/.cache/mipgnn/datasets")
-
-                # path to non processed train data
-                train_data_path = dataset_list[i]
-                name_train = name_list[i]
-                print(f"Train dataset {name_train}, data_path:{train_data_path}")
-
-                # train dataset
-                train_dataset = GraphDataset(name_train, processed_data_root, train_data_path, bias_threshold,
-                                             transform=MyTransform()).shuffle()
-                
-                # test dataset
-                test_data_path = dataset_list[i+1]
-                name_test = name_list[i+1]
-                print(f"Test dataset {name_test}, data_path:{test_data_path}")
-                test_dataset = GraphDataset(name_test, processed_data_root, test_data_path, bias_threshold,
-                                            transform=MyTransform()).shuffle()
-
-                train_index, val_index = train_test_split(list(range(0, len(train_dataset))), test_size=0.2)
-                #train_index, val_index = train_test_split(train_index, test_size=.2)
-
-                val_dataset = train_dataset[val_index].shuffle()
-                #test_dataset = train_dataset[test_index].shuffle() #test_dataset.shuffle()
-                train_dataset = train_dataset[train_index].shuffle()
-
-                train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-                val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True)
-                test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
+    torch.cuda.empty_cache()
+   
 
 
-                def train(epoch):
-                    model.train()
-
-                    # loss_all = 0
-                    zero = torch.tensor([0]).to(device)
-                    one = torch.tensor([1]).to(device)
-
-                    loss_all = 0
-
-                    for data in train_loader:
-                        data = data.to(device)
-
-                        y = data.y_real
-                        y = torch.where(y <= bias_threshold, zero, one).to(device)
-
-                        optimizer.zero_grad()
-                        output = model(data)
-
-                        loss = F.nll_loss(output, y)
-                        loss.backward()
-                        loss_all += batch_size * loss.item()
-                        optimizer.step()
-
-                    return loss_all / len(train_dataset)
-
-
-                @torch.no_grad()
-                def test(loader):
-                    model.eval()
-
-                    zero = torch.tensor([0]).to(device)
-                    one = torch.tensor([1]).to(device)
-                    f1 = F1Score(num_classes=2, average="macro").to(device)
-                    pr = Precision(num_classes=2, average="macro").to(device)
-                    re = Recall(num_classes=2, average="macro").to(device)
-                    acc = Accuracy(num_classes=2).to(device)
-
-                    first = True
-                    for data in loader:
-                        data = data.to(device)
-                        pred = model(data)
-
-                        y = data.y_real
-
-                        y = torch.where(y <= bias_threshold, zero, one).to(device)
-                        pred = pred.max(dim=1)[1]
-
-                        if not first:
-                            pred_all = torch.cat([pred_all, pred])
-                            y_all = torch.cat([y_all, y])
-                        else:
-                            pred_all = pred
-                            y_all = y
-                            first = False
-
-                    return acc(pred_all, y_all), f1(pred_all, y_all), pr(pred_all, y_all), re(pred_all, y_all)
-
-
-                best_val = 0.0
-                test_acc = 0.0
-                test_f1 = 0.0
-                test_re = 0.0
-                test_pr = 0.0
-                for epoch in range(1, num_epochs + 1):
-
-                    train_loss = train(epoch)
-                    train_acc, train_f1, train_pr, train_re = test(train_loader)
-
-                    val_acc, val_f1, val_pr, val_re = test(val_loader)
-                    scheduler.step(val_acc)
-                    lr = scheduler.optimizer.param_groups[0]['lr']
-
-                    if val_acc > best_val:
-                        best_val = val_acc
-                        test_acc, test_f1, test_pr, test_re = test(test_loader)
-                        model_directory = os.path.expanduser("~/.cache/mipgnn/models")
-                        model_path = os.path.join(model_directory, model_name)
-                        os.makedirs(model_directory, exist_ok=True)
-                        torch.save(model.state_dict(), model_path)
-
-                    log.append(
-                        [epoch, train_loss, 
-                            train_acc.item(), train_f1.item(), train_pr.item(), train_re.item(), 
-                            val_acc.item(), val_f1.item(), val_pr.item(), val_re.item(), best_val.item(), 
-                            test_acc.item(), test_f1.item(), test_pr.item(), test_re.item()])
-                    print(log[-1])
-
-                    # Break if learning rate is smaller 10**-6.
-                    if lr < 0.000001 or epoch == num_epochs:
-                        print([model_name, test_acc, test_f1, test_pr, test_re])
-                        test_scores.append([model_name, test_acc, test_f1, test_pr, test_re])
-                        log = np.array(log)
-                        model_directory = os.path.expanduser("~/.cache/mipgnn/models")
-                        model_log_path = os.path.join(model_directory, model_name+".log")
-
-                        np.savetxt(model_log_path, log, delimiter=",",
-                                   fmt='%1.5f')
-
-                        fig, axes = plt.subplots(5,3, figsize=(10,10))
-                        # training loss
-                        axes[0,1].set_title("Train Loss")
-                        axes[0,1].plot(log[:,1])
-
-                        # training metrics
-                        axes[1,0].set_title("Train Accuracy")
-                        axes[1,0].plot(log[:,2])
-                        axes[2,0].set_title("Train F1")
-                        axes[2,0].plot(log[:,3])
-                        axes[3,0].set_title("Train Precision")
-                        axes[3,0].plot(log[:,4])
-                        axes[4,0].set_title("Train Recall")
-                        axes[4,0].plot(log[:,5])
-
-                        # validation metrics
-                        axes[1,1].set_title("Val Accuracy")
-                        axes[1,1].plot(log[:,6])
-                        axes[2,1].set_title("Val F1")
-                        axes[2,1].plot(log[:,7])
-                        axes[3,1].set_title("Val Precision")
-                        axes[3,1].plot(log[:,8])
-                        axes[4,1].set_title("Val Recall")
-                        axes[4,1].plot(log[:,9])
-
-                        # testing metrics
-                        axes[1,2].set_title("Test Accuracy")
-                        axes[1,2].plot(log[:,11])
-                        axes[2,2].set_title("Test F1")
-                        axes[2,2].plot(log[:,12])
-                        axes[3,2].set_title("Test Precision")
-                        axes[3,2].plot(log[:,13])
-                        axes[4,2].set_title("Test Recall")
-                        axes[4,2].plot(log[:,14])
-
-                        plt.tight_layout()
-
-                        plt.savefig(f"{model_name}.png")
-                        break
-
-            torch.cuda.empty_cache()
