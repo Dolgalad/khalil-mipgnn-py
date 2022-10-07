@@ -57,7 +57,7 @@ def generate_instances(name, n_constraint=500, n_variable=500, density=0.2, n_in
         pool_path = os.path.join(path, f"{n}_pool.npz")
         if not os.path.exists(bias_path) or not os.path.exists(pool_path):
             pbar.set_description("bias search         ")
-            bias_search.search(instance_path, True, threads=10)
+            bias_search.search(instance_path, True, threads=12)
 
     # train test split
     if train_test_split != 0.0:
@@ -120,7 +120,7 @@ def process_instance_collection(path, keep_originals=False):
         pool_path = os.path.join(path, f"{n}_pool.npz")
         if not os.path.exists(bias_path) or not os.path.exists(pool_path):
             pbar.set_description("bias search         ")
-            bias_search.search(instance_path, True, threads=10)
+            bias_search.search(instance_path, True, threads=12)
 
 
 

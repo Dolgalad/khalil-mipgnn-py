@@ -1,8 +1,8 @@
 import sys
 
-sys.path.insert(0, '..')
-sys.path.insert(0, '../..')
-sys.path.insert(0, '.')
+#sys.path.insert(0, '..')
+#sys.path.insert(0, '../..')
+#sys.path.insert(0, '.')
 
 import torch_geometric.utils.softmax
 import torch
@@ -14,9 +14,9 @@ from torch_geometric.nn import MessagePassing
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-
-# Variables to constrains.
 class VarConBipartiteLayer(MessagePassing):
+    """Variable to constraints.
+    """
 
     def __init__(self, edge_dim, dim, var_assigment, aggr):
         super(VarConBipartiteLayer, self).__init__(aggr=aggr, flow="source_to_target")
@@ -50,8 +50,9 @@ class VarConBipartiteLayer(MessagePassing):
         return '{}(nn={})'.format(self.__class__.__name__, self.nn)
 
 
-# Compute error signal.
 class ErrorLayer(MessagePassing):
+    """Compute error signal.
+    """
     def __init__(self, dim, var_assignment):
         super(ErrorLayer, self).__init__(aggr="add", flow="source_to_target")
         self.var_assignment = var_assignment
@@ -109,9 +110,10 @@ class ConVarBipartiteLayer(MessagePassing):
         return '{}(nn={})'.format(self.__class__.__name__, self.nn)
 
 
-class SimpleNet(torch.nn.Module):
+class EdgeConvNet(torch.nn.Module):
+    _class_prefix="EC"
     def __init__(self, hidden, aggr, num_layers, regression=False):
-        super(SimpleNet, self).__init__()
+        super(EdgeConvNet, self).__init__()
         self.num_layers = num_layers
 
         self.regression = regression

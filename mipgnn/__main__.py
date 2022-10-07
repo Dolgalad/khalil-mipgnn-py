@@ -3,7 +3,7 @@ import argparse
 import json
 
 from mipgnn.datasets import list_processed_datasets
-from mipgnn.gnn_models import list_gnn_models
+from mipgnn.gnn_models import manager as gnn_manager
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--list-datasets", action="store_true", help="show a list of processed datasets")
@@ -36,9 +36,10 @@ if args.list_datasets:
         print(f"\t{dataset}")
 
 if args.list_gnn_models:
-    print("GNN Models")
-    for name,_ in list_gnn_models():
-        print(f"\t{name}")
+    print("#GNN Models:")
+    print("#\tprefix\tname")
+    for i,cls in enumerate(gnn_manager.list_model_classes()):
+        print(f"{i+1}\t{cls._class_prefix}\t{cls.__name__}")
 
 if args.list_models:
     print("Trained models")

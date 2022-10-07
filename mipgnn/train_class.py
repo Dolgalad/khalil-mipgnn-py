@@ -1,6 +1,9 @@
 import sys
 import argparse
 import json
+import time
+from  datetime import datetime
+date_fmt = "%d/%m/%YT%H:%M:%S.%f"
 
 from progress.bar import Bar
 
@@ -21,14 +24,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from mipgnn.gnn_models.EdgeConv.mip_bipartite_class import SimpleNet as EdgeConv
-from mipgnn.gnn_models.EdgeConv.mip_bipartite_simple_class import SimpleNet as EdgeConvSimple
-
-from mipgnn.gnn_models.GIN.mip_bipartite_class import SimpleNet as GIN
-from mipgnn.gnn_models.GIN.mip_bipartite_simple_class import SimpleNet as GINSimple
-
-from mipgnn.gnn_models.Sage.mip_bipartite_class import SimpleNet as Sage
-from mipgnn.gnn_models.Sage.mip_bipartite_simple_class import SimpleNet as SageSimple
+from mipgnn.gnn_models import manager as gnn_manager
 
 from mipgnn.predict import create_data_object
 
@@ -36,9 +32,16 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 from mipgnn.datasets import GraphDataset, MyData, MyTransform
 
+def is_int(s):
+    try:
+        i = int(s)
+        return True
+    except:
+        return False
+
 def train_epoch_model(model, dataloader, optimizer, device=None, batch_size=10):
-    if device is None:
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    #if device is None:
+    #    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     #model.to(device)
     model.train()
 
@@ -50,6 +53,8 @@ def train_epoch_model(model, dataloader, optimizer, device=None, batch_size=10):
 
     for data in dataloader:
         data = data.to(device)
+        #print("data shape, ", data.shape)
+
 
         y = data.y_real
         y = torch.where(y <= bias_threshold, zero, one).to(device)
@@ -84,9 +89,9 @@ def train_model(model, epochs, train_loader, val_loader, optimizer, device=None,
         for epoch in range(epochs):
             train_loss = train_epoch_model(model, train_loader, optimizer, batch_size=batch_size)
     
-            [train_acc,train_f1,train_pr,train_re] = evaluate_model(model, train_loader, metrics=metrics)
+            [train_loss, train_acc,train_f1,train_pr,train_re] = evaluate_model(model, train_loader, metrics=metrics)
     
-            [val_acc,val_f1,val_pr,val_re] = evaluate_model(model, val_loader, metrics=metrics)
+            [val_loss,val_acc,val_f1,val_pr,val_re] = evaluate_model(model, val_loader, metrics=metrics)
             scheduler.step(val_acc)
             lr = scheduler.optimizer.param_groups[0]['lr']
     
@@ -98,6 +103,7 @@ def train_model(model, epochs, train_loader, val_loader, optimizer, device=None,
             history.append(
                 [epoch, train_loss, 
                     train_acc.item(), train_f1.item(), train_pr.item(), train_re.item(), 
+                    val_loss,
                     val_acc.item(), val_f1.item(), val_pr.item(), val_re.item(), best_val.item(), 
                     ])
                     #test_acc.item(), test_f1.item(), test_pr.item(), test_re.item()])
@@ -113,9 +119,10 @@ def train_model(model, epochs, train_loader, val_loader, optimizer, device=None,
 
             bar.next()
     history = np.array(history)
-    print(f"Saving history to {model_log_path}")
+    print(f"Saving training history to {model_log_path}")
     np.savetxt(model_log_path, history, delimiter=",",
-                           fmt='%1.5f')
+                           fmt='%1.5f',
+                           header="epoch,train_loss,train_acc,train_f1,train_pr,train_re,val_loss,val_acc,val_f1,val_pr,val_re,best_val_acc")
 
     return np.array(history)
 
@@ -134,14 +141,24 @@ def evaluate_model(model, dataloader, device=None, metrics=[]):
     metrics = [metric.to(device) for metric in metrics]
 
     first = True
+    loss_all  = 0.
     for data in dataloader:
         data = data.to(device)
         pred = model(data)
-
+        
+        
         y = data.y_real
 
-        y = torch.where(y <= bias_threshold, zero, one).to(device)
+        y = torch.where(y <= bias_threshold, zero, one)#.to(device)
+
+        loss = F.nll_loss(pred, y)
+
         pred = pred.max(dim=1)[1]
+
+        #print("in evaluate_model", len(data), len(dataloader), pred.shape, y.shape)
+        loss_all += len(data) * loss.item()
+
+
 
         if not first:
             pred_all = torch.cat([pred_all, pred])
@@ -151,7 +168,7 @@ def evaluate_model(model, dataloader, device=None, metrics=[]):
             y_all = y
             first = False
 
-    return [m(pred_all, y_all) for m in metrics]
+    return [loss_all/len(dataloader)]+[m(pred_all, y_all) for m in metrics]
 
     return acc(pred_all, y_all), f1(pred_all, y_all), pr(pred_all, y_all), re(pred_all, y_all)
 
@@ -171,19 +188,11 @@ name_list = [
     #"xin_set_cover_1500_1500-2000_0.1",
 ]
 
-gnn_models = [("EdgeConv", EdgeConv, dict(hidden=64, num_layers=4, aggr="mean", regression=False)),
-        ("EdgeConvSimple", EdgeConvSimple, dict(hidden=64, num_layers=4, aggr="mean", regression=False)),
-        ("GIN", GIN, dict(hidden=64, num_layers=4, aggr="mean", regression=False)),
-        ("GINSimple", GINSimple, dict(hidden=64, num_layers=4, aggr="mean", regression=False)),
-        ("Sage", Sage, dict(hidden=64, num_layers=4, aggr="mean", regression=False)),
-        ("SageSimple", SageSimple, dict(hidden=64, num_layers=4, aggr="mean", regression=False))
-        ]
-
 
 if __name__=="__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("model", type=str, help="model that you want to train")
-    parser.add_argument("model_args", type=str, help="model constructor arguments as JSON")
+    parser.add_argument("--model-args", type=str, help="model constructor arguments as JSON", default=gnn_manager.DEFAULT_MODEL_ARGS_STR)
     parser.add_argument("--name", type=str, help="name of the trained model", default="")
     parser.add_argument("--train-data", type=str, help="path to training data")
     parser.add_argument("--validation-split", type=float, help="validation split (default=0.)", default=0.)
@@ -194,9 +203,13 @@ if __name__=="__main__":
     parser.add_argument("--min-learning-rate", type=float, help="minimum learning rate (default=0.0000001)", default=0.0000001)
     parser.add_argument("--patience", type=int, help="scheduler patience (default=10)", default=10)
     parser.add_argument("--train-test-split", type=float, help="split into training and testing sets (default=0.2)", default=0.2)
+    parser.add_argument("--list-models", action="store_true", help="show a list of model classes")
 
 
     args = parser.parse_args()
+
+    # starting datetime
+    start_dt = datetime.now()
 
     # metrics 
     metrics = [Accuracy(num_classes=2),
@@ -207,7 +220,7 @@ if __name__=="__main__":
 
     # Prepare data.
     bias_threshold = args.bias_threshold
-    batch_size = args.batch_size
+    batch_size = 1#args.batch_size
     num_epochs = args.epochs
 
     # processed dataset directory
@@ -226,17 +239,21 @@ if __name__=="__main__":
 
     # model
     model_args = json.loads(args.model_args)
-    model = eval(args.model)(**model_args).to(device)
+    print(f"Training model class: {args.model}")
+    print(f"Model arguments:")
+    print(json.dumps(model_args, indent=4, sort_keys=True))
+    
+    if is_int(args.model):
+        model_cls = gnn_manager.get_model_class_instance(index=int(args.model))
+    else:
+        model_cls = gnn_manager.get_model_class_instance(name=args.model)
+    model = model_cls(**model_args).to(device)
     model_name = args.name
     if len(model_name)==0:
-        model_name = f"{model}_{name_train}"
+        model_name = f"{model_cls._class_prefix}_{name_train}"
 
-    print(f"Model saved as {model_name}")
+    print(f"Model name: {model_name}")
     
-    # model
-    #model = EdgeConv(hidden=64, num_layers=4, aggr="mean", regression=False)
-    #model_name = f"EC_{name_list[0]}_{bias_threshold}"
-
     # training settings
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',
@@ -256,11 +273,17 @@ if __name__=="__main__":
     #test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
 
     # train the model
+    torch.cuda.empty_cache()
+    
+    training_start_t = time.time()
     history = train_model(model, args.epochs, train_loader, val_loader, optimizer, model_name=model_name, metrics=metrics)
+    training_end_t = time.time()
+    t_train = training_end_t - training_start_t
 
     # save the models training arguments
     model_data = {"name": model_name,
-            "model_class":args.model,
+            "datetime": datetime.strftime(start_dt, date_fmt),
+            "model_class":model_cls.__name__,
             "model_args": json.loads(args.model_args),
             "epochs": args.epochs,
             "learining_rate": args.learning_rate,
@@ -268,10 +291,15 @@ if __name__=="__main__":
             "min_learning_rate": args.min_learning_rate,
             "train_dataset": name_train,
             "train_test_split": args.train_test_split,
+            "times":{
+                "training_start": training_start_t,
+                "training_end": training_end_t,
+                "training_seconds": t_train,
+            }
             }
     model_data_path= os.path.expanduser(f"~/.cache/mipgnn/models/{model_name}.json")
     with open(model_data_path, "w") as f:
-        f.write(json.dumps(model_data))
+        f.write(json.dumps(model_data, indent=4, sort_keys=True))
 
     torch.cuda.empty_cache()
    

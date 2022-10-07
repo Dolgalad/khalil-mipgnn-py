@@ -23,6 +23,8 @@ class MIPInstance:
         self.bnd_names = bnd_names
         self.bnd = bnd
 
+        self.filename = None
+
         if len(self.rhs_names) == 0:
             self.rhs_names = ["rhs"]
             self.rhs = {"rhs": np.zeros(self.constraint_count())}
@@ -68,7 +70,9 @@ class MIPInstance:
                 new_row_names.append(f"{row_name}_l")
         new_A = np.array(new_A)
         return MIPInstance(self.name, self.objective_name, new_row_names, self.col_names, self.variable_types, new_constraint_types, self.c, new_A, self.rhs_names, self.rhs, self.bnd_names, self.bnd)
-
+    
+    def vcgraph(self):
+        return self.bipartite_graph()
     def bipartite_graph(self):
         """Build the bipartite graph representing the problem
         """
@@ -93,7 +97,9 @@ class MIPInstance:
     def load(filename: str):
         """Load data from MPS file
         """
-        return MIPInstance(*smps.load_mps(filename))
+        mip = MIPInstance(*smps.load_mps(filename))
+        mip.filename = filename
+        return mip
 
     @staticmethod
     def dump(instance, file):

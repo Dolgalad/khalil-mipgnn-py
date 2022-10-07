@@ -1,5 +1,7 @@
 """Base solver implemented using CPLEX
 """
+import tempfile
+
 from cplex import Cplex
 from cplex.callbacks import MIPInfoCallback
 
@@ -13,7 +15,6 @@ class SolverInfoCallback(MIPInfoCallback):
         super().__init__(*args, **kwargs)
         self.history = {f:[] for f in history_fields}
     def __call__(self, *args, **kwargs):
-
         self.get_data()
     def get_data(self):
         self.history["time"].append(self.get_time())
@@ -30,11 +31,24 @@ class SolverInfoCallback(MIPInfoCallback):
 
 
 class MIPSolver(Cplex):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, **kwargs):
         """Initialize the solver
         """
-        super().__init__(*args, **kwargs)
+        super().__init__()
+        self.set_cplex_parameters(**kwargs)
         self.info_callback = self.register_callback(SolverInfoCallback)
+        self.solver_parameters = kwargs
+        self.history = {}
+
+    def set_cplex_parameters(self, **params):
+        self.parameters.timelimit.set(params.get("timelimit",60 ))
+        self.parameters.emphasis.mip.set(params.get("cpx_emphasis", 1))
+        self.parameters.mip.display.set(3)
+        self.parameters.threads.set(params.get("cpx_threads", 1))
+        self.parameters.workmem.set(params.get("memlimit", 1024))
+        self.parameters.mip.limits.treememory.set(20000)
+        self.parameters.mip.strategy.file.set(2)
+        self.parameters.workdir.set(params.get("cpx_tmp", "./cpx_tmp"))
 
     def quiet(self):
         self.set_log_stream(None)
@@ -50,18 +64,19 @@ class MIPSolver(Cplex):
             t0 = self.get_time()
             self.solve()
             t0 = self.get_time() - t0
-            print(self.solution.MIP.__dict__.keys())
-            print(self.solution.is_primal_feasible())
-            print(self.solution.MIP.get_mip_relative_gap())
-            print(t0)
+            self.history["t_solve"] = t0
         if instance:
             # dump the instance to a temporary file
-            with tempfile.NamedTemporaryFile() as tmpf:
-                instance.dump(tmpf)
+            with tempfile.TemporaryDirectory() as tmpdir:
+                ipath = os.path.join(tmpdir, "instance.mps")
+                MIPInstance.dump(instance, tmpf)
                 return self.optimize(filename = tmpf.name)
+        # check that the info callback best objective value is equal to the solutions objective value
+        if len(self.info_callback.history["best_objective_value"]):
+            best_obv = self.info_callback.history["best_objective_value"][-1]
+        self.history["solution.is_primal_feasible"] = self.solution.is_primal_feasible()
+        return self.solution.get_values(), {**self.history, **self.info_callback.history}
 
-
-        pass
 
 if __name__=="__main__":
     # initialize the solver

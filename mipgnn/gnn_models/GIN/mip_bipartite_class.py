@@ -130,9 +130,11 @@ class ConVarBipartiteLayer(MessagePassing):
         return '{}(nn={})'.format(self.__class__.__name__, self.nn)
 
 
-class SimpleNet(torch.nn.Module):
+class GINNet(torch.nn.Module):
+    _class_prefix="GIN"
+
     def __init__(self, hidden, aggr, num_layers, regression=False):
-        super(SimpleNet, self).__init__()
+        super(GINNet, self).__init__()
         self.num_layers = num_layers
 
         self.regression = regression

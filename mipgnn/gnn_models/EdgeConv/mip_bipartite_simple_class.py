@@ -1,8 +1,8 @@
 import sys
 
-sys.path.insert(0, '..')
-sys.path.insert(0, '../..')
-sys.path.insert(0, '.')
+#sys.path.insert(0, '..')
+#sys.path.insert(0, '../..')
+#sys.path.insert(0, '.')
 
 import torch
 import torch.nn.functional as F
@@ -39,9 +39,10 @@ class SimpleBipartiteLayer(MessagePassing):
         return '{}(nn={})'.format(self.__class__.__name__, self.nn)
 
 
-class SimpleNet(torch.nn.Module):
+class EdgeConvSimpleNet(torch.nn.Module):
+    _class_prefix = "ECS"
     def __init__(self, hidden, aggr, num_layers, regression=False):
-        super(SimpleNet, self).__init__()
+        super(EdgeConvSimpleNet, self).__init__()
         self.num_layers = num_layers
 
         self.regression = regression

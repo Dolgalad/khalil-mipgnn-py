@@ -96,7 +96,8 @@ def create_data_object(graph, bias_threshold):
     # Iterate over nodes, and collect features.
     for i, (node, node_data) in enumerate(graph.nodes(data=True)):
         # Node is a variable node.
-        if node_data['bipartite'] == 0:
+        #if node_data['bipartite'] == 0 or node_data["type"]=="variable":
+        if node_data["type"] == "variable":
             node_to_varnode[i] = num_nodes_var
             num_nodes_var += 1
 
@@ -121,7 +122,7 @@ def create_data_object(graph, bias_threshold):
             index_var.append(0)
 
         # Node is constraint node.
-        elif node_data['bipartite'] == 1:
+        elif node_data['type'] == "constraint":
             node_to_connode[i] = num_nodes_con
             num_nodes_con += 1
 
@@ -154,7 +155,7 @@ def create_data_object(graph, bias_threshold):
     for i, (s, t, edge_data) in enumerate(graph.edges(data=True)):
         # Source node is con, target node is var.
 
-        if graph.nodes[s]['bipartite'] == 1:
+        if graph.nodes[s]['type'] == "constraint":
             # Source node is constraint. C->V.
             edge_list_con.append([node_to_connode[s], node_to_varnode[t]])
             edge_features_con.append([edge_data['coeff']])

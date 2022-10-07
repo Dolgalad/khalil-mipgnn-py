@@ -128,9 +128,10 @@ class ConVarBipartiteLayer(MessagePassing):
         return aggr_out
 
 
-class SimpleNet(torch.nn.Module):
+class SageNet(torch.nn.Module):
+    _class_prefix="SG"
     def __init__(self, hidden, aggr, num_layers, regression=False):
-        super(SimpleNet, self).__init__()
+        super(SageNet, self).__init__()
         self.num_layers = num_layers
 
         self.regression = regression
