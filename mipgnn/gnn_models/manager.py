@@ -30,7 +30,6 @@ def get_model_class_instance(index=None, name=None):
     if name:
         class_names = [cls.__name__ for cls in model_classes]
         p = class_names.index(name)
-        print(p, name, class_names)
         if p>=0:
             return model_classes[p]
     

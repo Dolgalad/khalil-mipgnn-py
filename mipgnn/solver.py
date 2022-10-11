@@ -1,6 +1,7 @@
 """Base solver implemented using CPLEX
 """
 import tempfile
+import numpy as np
 
 from cplex import Cplex
 from cplex.callbacks import MIPInfoCallback
@@ -49,6 +50,7 @@ class MIPSolver(Cplex):
         self.parameters.mip.limits.treememory.set(20000)
         self.parameters.mip.strategy.file.set(2)
         self.parameters.workdir.set(params.get("cpx_tmp", "./cpx_tmp"))
+        self.solver_parameters = params
 
     def quiet(self):
         self.set_log_stream(None)
@@ -74,6 +76,13 @@ class MIPSolver(Cplex):
         # check that the info callback best objective value is equal to the solutions objective value
         if len(self.info_callback.history["best_objective_value"]):
             best_obv = self.info_callback.history["best_objective_value"][-1]
+            #print("best obj", best_obv)
+            ##print("incumbent objv : ", self.info_callback.get_incumbent_objective_value())
+            #print("blabal ", self.info_callback.history["incumbent_objective_value"][-1])
+            #print("sol obj", np.dot(self.solution.get_values(), self.objective.get_linear()))
+            #print("sollo ", self.solution.get_objective_value())
+            #print(self.objective.sense[self.objective.get_sense()])
+
         self.history["solution.is_primal_feasible"] = self.solution.is_primal_feasible()
         return self.solution.get_values(), {**self.history, **self.info_callback.history}
 
@@ -86,10 +95,10 @@ if __name__=="__main__":
 
 
     # path to MIP instance
-    #mip_path = "/home/aschulz/.cache/mipgnn/datasets/set_cover_n1000_nv1000_nc1000_d0.1/train/1.mps"
+    mip_path = "/home/aschulz/.cache/mipgnn/datasets/set_cover_n100_nv100_nc100_d0.1/1.mps"
 
     # load a problem
-    mip = MIPInstance.load("/home/aschulz/.cache/mipgnn/datasets/set_cover_n1000_nv30_nc30_d0.1/1.mps")
+    mip = MIPInstance.load("/home/aschulz/.cache/mipgnn/datasets/set_cover_n100_nv100_nc100_d0.1/1.mps")
 
     # solve the problem
     r = solver.optimize(filename=mip_path)

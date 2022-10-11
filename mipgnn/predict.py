@@ -152,8 +152,12 @@ def create_data_object(graph, bias_threshold):
 
     # Remark: graph is directed, i.e., each edge exists for each direction.
     # Flow of messages: source -> target.
+    #print(100*"hh")
+    #print("\t", len(graph.edges))
+    #print("\t", len(graph.nodes))
     for i, (s, t, edge_data) in enumerate(graph.edges(data=True)):
         # Source node is con, target node is var.
+        #print("\t", i, s, t, edge_data, graph.nodes[s]["type"])
 
         if graph.nodes[s]['type'] == "constraint":
             # Source node is constraint. C->V.

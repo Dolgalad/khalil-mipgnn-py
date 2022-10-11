@@ -71,6 +71,7 @@ class EdgeConvSimpleNet(torch.nn.Module):
             self.lin4 = Linear(hidden, 1)
 
     def forward(self, data):
+        #print(data)
 
         # Get data of batch.
         var_node_features = data.var_node_features
@@ -83,6 +84,8 @@ class EdgeConvSimpleNet(torch.nn.Module):
         num_nodes_con = data.num_nodes_con
 
         # Compute initial node embeddings.
+        #print("var_node_features : ", var_node_features)
+        #print("con_node_features : ", con_node_features)
         var_node_features_0 = self.var_node_encoder(var_node_features)
         con_node_features_0 = self.con_node_encoder(con_node_features)
 

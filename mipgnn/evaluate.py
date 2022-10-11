@@ -30,18 +30,22 @@ def evaluate(solver, dataset_path, output_dir, solver_name=None):
 
 def load_history(directory):
     print(f"Loading history data from : {directory}")
-    history_data = {"best_objective_value": [],
+    history_data = {"incumbent_objective_value": [],
             "mip_relative_gap": [],
             "num_iterations": [],
             "num_nodes": [],
-            "num_remaining_nodes": []
+            "num_remaining_nodes": [],
+            "t_solve":[]
             }
 
     for f in os.listdir(directory):
         sol,hist = pkl.load(open(os.path.join(directory, f), "rb"))
         for k in history_data: 
-            if len(hist[k]):
+            if isinstance(hist[k], list) and len(hist[k]):
                 history_data[k].append(hist[k][-1])
+            if isinstance(hist[k], float) :
+                history_data[k].append(hist[k])
+        
     return history_data
 
 def view_history(directories, output_dir=None, labels=None):
@@ -81,13 +85,18 @@ if __name__=="__main__":
     args = parser.parse_args()
 
     # initialize the solvers
-    solvers = [MIPGNNSolver("SimpleNet_set_cover_n100_nv100_nc100_d0.1"),
-            MIPGNNSolver("SimpleNet_set_cover_n100_nv100_nc100_d0.1", branching_method="local_branching_exact")
-            ]
-    solvers +=[MIPSolver()]
-   
-    solver_names =  ["EdgeConv~lb", "EdgeConv-elb"]
+    model_name = args.model_name #:"ECS_set_cover_n100_nv100_nc100_d0.1"
+
+    solvers = [MIPGNNSolver(model_name, timelimit=600),]
+    #        MIPGNNSolver(model_name, branching_method="local_branching_exact"),
+    #        MIPGNNSolver(model_name, node_selection=True),
+    #        MIPGNNSolver(model_name, branching_priorities=True),
+    #        ]
+    solvers +=[MIPSolver(timelimit=600)]
+  
+    solver_names =  ["EC~lb"] #, "EC-elb", "ECns","ECbp"]
     solver_names += [f"CPLEX"]
+
     _ = [solver.quiet() for solver in solvers]
     history_directories = []
     #solver.quiet()

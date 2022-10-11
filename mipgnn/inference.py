@@ -18,7 +18,6 @@ import math
 import torch
 from torch_geometric.data import (InMemoryDataset, Data)
 from torch_geometric.data import DataLoader
-from mipgnn.gnn_models.EdgeConv.mip_bipartite_simple_class import SimpleNet
 
 import cplex
 
